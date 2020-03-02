@@ -20,6 +20,11 @@
 #include <Userenv.h>
 #pragma comment(lib, "Userenv.lib")
 
+#include <assert.h>
+#include <process.h>
+
+#include <strsafe.h>
+
 /**
  * @remark You can read the definition for this function in "Mile.Windows.h".
  */
@@ -1567,3 +1572,885 @@ EXTERN_C HRESULT WINAPI MileWaitForSingleObject(
 
     return S_OK;
 }
+
+/**
+ * @remark You can read the definition for this function in "Mile.Windows.h".
+ */
+EXTERN_C HRESULT WINAPI MileCreateThread(
+    _In_opt_ LPSECURITY_ATTRIBUTES lpThreadAttributes,
+    _In_ SIZE_T dwStackSize,
+    _In_ LPTHREAD_START_ROUTINE lpStartAddress,
+    _In_opt_ LPVOID lpParameter,
+    _In_ DWORD dwCreationFlags,
+    _Out_opt_ LPDWORD lpThreadId,
+    _Out_ PHANDLE lpThreadHandle)
+{
+    // sanity check for lpThreadId
+    assert(sizeof(DWORD) == sizeof(unsigned));
+
+    typedef unsigned(__stdcall* routine_type)(void*);
+
+    // _beginthreadex calls CreateThread which will set the last error
+    // value before it returns.
+    *lpThreadHandle = reinterpret_cast<HANDLE>(_beginthreadex(
+        lpThreadAttributes,
+        static_cast<unsigned>(dwStackSize),
+        reinterpret_cast<routine_type>(lpStartAddress),
+        lpParameter,
+        dwCreationFlags,
+        reinterpret_cast<unsigned*>(lpThreadId)));
+
+    return *lpThreadHandle ? S_OK : ::HRESULT_FROM_WIN32(::GetLastError());
+}
+
+/**
+ * @remark You can read the definition for this function in "Mile.Windows.h".
+ */
+EXTERN_C DWORD WINAPI MileGetNumberOfHardwareThreads()
+{
+    SYSTEM_INFO SystemInfo = { 0 };
+    ::GetNativeSystemInfo(&SystemInfo);
+    return SystemInfo.dwNumberOfProcessors;
+}
+
+#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP | WINAPI_PARTITION_SYSTEM)
+
+/**
+ * @remark You can read the definition for this function in "Mile.Windows.h".
+ */
+EXTERN_C HRESULT WINAPI MileRegCloseKey(
+    _In_ HKEY hKey)
+{
+    return ::HRESULT_FROM_WIN32(::RegCloseKey(hKey));
+}
+
+#endif
+
+#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP | WINAPI_PARTITION_SYSTEM)
+
+/**
+ * @remark You can read the definition for this function in "Mile.Windows.h".
+ */
+EXTERN_C HRESULT WINAPI MileRegCreateKey(
+    _In_ HKEY hKey,
+    _In_ LPCWSTR lpSubKey,
+    _Reserved_ DWORD Reserved,
+    _In_opt_ LPWSTR lpClass,
+    _In_ DWORD dwOptions,
+    _In_ REGSAM samDesired,
+    _In_opt_ CONST LPSECURITY_ATTRIBUTES lpSecurityAttributes,
+    _Out_ PHKEY phkResult,
+    _Out_opt_ LPDWORD lpdwDisposition)
+{
+    return ::HRESULT_FROM_WIN32(::RegCreateKeyExW(
+        hKey,
+        lpSubKey,
+        Reserved,
+        lpClass,
+        dwOptions,
+        samDesired,
+        lpSecurityAttributes,
+        phkResult,
+        lpdwDisposition));
+}
+
+#endif
+
+#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP | WINAPI_PARTITION_SYSTEM)
+
+/**
+ * @remark You can read the definition for this function in "Mile.Windows.h".
+ */
+EXTERN_C HRESULT WINAPI MileRegQueryValue(
+    _In_ HKEY hKey,
+    _In_opt_ LPCWSTR lpValueName,
+    _Reserved_ LPDWORD lpReserved,
+    _Out_opt_ LPDWORD lpType,
+    _Out_opt_ LPBYTE lpData,
+    _Inout_opt_ LPDWORD lpcbData)
+{
+    return ::HRESULT_FROM_WIN32(::RegQueryValueExW(
+        hKey,
+        lpValueName,
+        lpReserved,
+        lpType,
+        lpData,
+        lpcbData));
+}
+
+#endif
+
+#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP | WINAPI_PARTITION_SYSTEM)
+
+/**
+ * @remark You can read the definition for this function in "Mile.Windows.h".
+ */
+EXTERN_C HRESULT WINAPI MileRegSetValue(
+    _In_ HKEY hKey,
+    _In_opt_ LPCWSTR lpValueName,
+    _Reserved_ DWORD Reserved,
+    _In_ DWORD dwType,
+    _In_opt_ CONST BYTE* lpData,
+    _In_ DWORD cbData)
+{
+    return ::HRESULT_FROM_WIN32(::RegSetValueExW(
+        hKey,
+        lpValueName,
+        Reserved,
+        dwType,
+        lpData,
+        cbData));
+}
+
+#endif
+
+/**
+ * @remark You can read the definition for this function in "Mile.Windows.h".
+ */
+EXTERN_C HRESULT WINAPI MileGetFileInformation(
+    _In_  HANDLE hFile,
+    _In_  FILE_INFO_BY_HANDLE_CLASS FileInformationClass,
+    _Out_ LPVOID lpFileInformation,
+    _In_  DWORD dwBufferSize)
+{
+    if (!::GetFileInformationByHandleEx(
+        hFile,
+        FileInformationClass,
+        lpFileInformation,
+        dwBufferSize))
+    {
+        return ::HRESULT_FROM_WIN32(::GetLastError());
+    }
+
+    return S_OK;
+}
+
+/**
+ * @remark You can read the definition for this function in "Mile.Windows.h".
+ */
+EXTERN_C HRESULT WINAPI MileSetFileInformation(
+    _In_ HANDLE hFile,
+    _In_ FILE_INFO_BY_HANDLE_CLASS FileInformationClass,
+    _In_ LPVOID lpFileInformation,
+    _In_ DWORD dwBufferSize)
+{
+    if (!::SetFileInformationByHandle(
+        hFile,
+        FileInformationClass,
+        lpFileInformation,
+        dwBufferSize))
+    {
+        return ::HRESULT_FROM_WIN32(::GetLastError());
+    }
+
+    return S_OK;
+}
+
+/**
+ * @remark You can read the definition for this function in "Mile.Windows.h".
+ */
+EXTERN_C HRESULT WINAPI MileGetFileAttributes(
+    _In_ HANDLE FileHandle,
+    _Out_ PDWORD FileAttributes)
+{
+    FILE_BASIC_INFO BasicInfo;
+
+    HRESULT hr = ::MileGetFileInformation(
+        FileHandle,
+        FILE_INFO_BY_HANDLE_CLASS::FileBasicInfo,
+        &BasicInfo,
+        sizeof(FILE_BASIC_INFO));
+
+    *FileAttributes = (hr == S_OK)
+        ? BasicInfo.FileAttributes
+        : INVALID_FILE_ATTRIBUTES;
+
+    return hr;
+}
+
+/**
+ * @remark You can read the definition for this function in "Mile.Windows.h".
+ */
+EXTERN_C HRESULT WINAPI MileSetFileAttributes(
+    _In_ HANDLE FileHandle,
+    _In_ DWORD FileAttributes)
+{
+    FILE_BASIC_INFO BasicInfo = { 0 };
+    BasicInfo.FileAttributes =
+        FileAttributes & (
+            FILE_SHARE_READ |
+            FILE_SHARE_WRITE |
+            FILE_SHARE_DELETE |
+            FILE_ATTRIBUTE_ARCHIVE |
+            FILE_ATTRIBUTE_TEMPORARY |
+            FILE_ATTRIBUTE_OFFLINE |
+            FILE_ATTRIBUTE_NOT_CONTENT_INDEXED |
+            FILE_ATTRIBUTE_NO_SCRUB_DATA) |
+        FILE_ATTRIBUTE_NORMAL;
+
+    return ::MileSetFileInformation(
+        FileHandle,
+        FILE_INFO_BY_HANDLE_CLASS::FileBasicInfo,
+        &BasicInfo,
+        sizeof(FILE_BASIC_INFO));
+}
+
+/**
+ * @remark You can read the definition for this function in "Mile.Windows.h".
+ */
+EXTERN_C HRESULT WINAPI MileGetFileSize(
+    _In_ HANDLE FileHandle,
+    _Out_ PULONGLONG FileSize)
+{
+    FILE_STANDARD_INFO StandardInfo;
+
+    HRESULT hr = ::MileGetFileInformation(
+        FileHandle,
+        FILE_INFO_BY_HANDLE_CLASS::FileStandardInfo,
+        &StandardInfo,
+        sizeof(FILE_STANDARD_INFO));
+
+    *FileSize = (hr == S_OK)
+        ? static_cast<ULONGLONG>(StandardInfo.EndOfFile.QuadPart)
+        : 0;
+
+    return hr;
+}
+
+/**
+ * @remark You can read the definition for this function in "Mile.Windows.h".
+ */
+EXTERN_C HRESULT WINAPI MileGetFileAllocationSize(
+    _In_ HANDLE FileHandle,
+    _Out_ PULONGLONG AllocationSize)
+{
+    FILE_STANDARD_INFO StandardInfo;
+
+    HRESULT hr = ::MileGetFileInformation(
+        FileHandle,
+        FILE_INFO_BY_HANDLE_CLASS::FileStandardInfo,
+        &StandardInfo,
+        sizeof(FILE_STANDARD_INFO));
+
+    *AllocationSize = (hr == S_OK)
+        ? static_cast<ULONGLONG>(StandardInfo.AllocationSize.QuadPart)
+        : 0;
+
+    return hr;
+}
+
+/**
+ * @remark You can read the definition for this function in "Mile.Windows.h".
+ */
+EXTERN_C HRESULT WINAPI MileDeleteFile(
+    _In_ HANDLE FileHandle)
+{
+    FILE_DISPOSITION_INFO DispostionInfo;
+    DispostionInfo.DeleteFile = TRUE;
+
+    return ::MileSetFileInformation(
+        FileHandle,
+        FILE_INFO_BY_HANDLE_CLASS::FileDispositionInfo,
+        &DispostionInfo,
+        sizeof(FILE_DISPOSITION_INFO));
+}
+
+/**
+ * @remark You can read the definition for this function in "Mile.Windows.h".
+ */
+EXTERN_C HRESULT WINAPI MileDeleteFileIgnoreReadonlyAttribute(
+    _In_ HANDLE FileHandle)
+{
+    HRESULT hr = S_OK;
+    DWORD OldAttribute = 0;
+
+    // Save old attributes.
+    hr = ::MileGetFileAttributes(
+        FileHandle,
+        &OldAttribute);
+    if (hr == S_OK)
+    {
+        // Remove readonly attribute.
+        hr = ::MileSetFileAttributes(
+            FileHandle,
+            OldAttribute & (-1 ^ FILE_ATTRIBUTE_READONLY));
+        if (hr == S_OK)
+        {
+            // Delete the file.
+            hr = ::MileDeleteFile(FileHandle);
+            if (hr != S_OK)
+            {
+                // Restore attributes if failed.
+                hr = ::MileSetFileAttributes(
+                    FileHandle,
+                    OldAttribute);
+            }
+        }
+    }
+
+    return hr;
+}
+
+#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP | WINAPI_PARTITION_SYSTEM)
+
+/**
+ * @remark You can read the definition for this function in "Mile.Windows.h".
+ */
+EXTERN_C HRESULT WINAPI MileLoadLibrary(
+    _In_ LPCWSTR lpLibFileName,
+    _Reserved_ HANDLE hFile,
+    _In_ DWORD dwFlags,
+    _Out_ HMODULE* phLibModule)
+{
+    *phLibModule = ::LoadLibraryExW(lpLibFileName, hFile, dwFlags);
+    return *phLibModule ? S_OK : ::HRESULT_FROM_WIN32(::GetLastError());
+}
+
+#endif
+
+/**
+ * @remark You can read the definition for this function in "Mile.Windows.h".
+ */
+EXTERN_C HRESULT WINAPI MileFreeLibrary(
+    _In_ HMODULE hLibModule)
+{
+    if (!::FreeLibrary(hLibModule))
+    {
+        return ::HRESULT_FROM_WIN32(::GetLastError());
+    }
+
+    return S_OK;
+}
+
+/**
+ * @remark You can read the definition for this function in "Mile.Windows.h".
+ */
+EXTERN_C HRESULT WINAPI MileGetProcAddress(
+    _In_ HMODULE hModule,
+    _In_ LPCSTR lpProcName,
+    _Out_ FARPROC* lpProcAddress)
+{
+    *lpProcAddress = ::GetProcAddress(hModule, lpProcName);
+    return *lpProcAddress ? S_OK : ::HRESULT_FROM_WIN32(::GetLastError());
+}
+
+#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP | WINAPI_PARTITION_SYSTEM)
+
+/**
+ * @remark You can read the definition for this function in "Mile.Windows.h".
+ */
+EXTERN_C HRESULT WINAPI MileCreateFile(
+    _Out_ PHANDLE lpFileHandle,
+    _In_ LPCWSTR lpFileName,
+    _In_ DWORD dwDesiredAccess,
+    _In_ DWORD dwShareMode,
+    _In_opt_ LPSECURITY_ATTRIBUTES lpSecurityAttributes,
+    _In_ DWORD dwCreationDisposition,
+    _In_ DWORD dwFlagsAndAttributes,
+    _In_opt_ HANDLE hTemplateFile)
+{
+    *lpFileHandle = ::CreateFileW(
+        lpFileName,
+        dwDesiredAccess,
+        dwShareMode,
+        lpSecurityAttributes,
+        dwCreationDisposition,
+        dwFlagsAndAttributes,
+        hTemplateFile);
+
+    return (*lpFileHandle != INVALID_HANDLE_VALUE)
+        ? S_OK :
+        ::HRESULT_FROM_WIN32(::GetLastError());
+}
+
+#endif
+
+#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP | WINAPI_PARTITION_SYSTEM)
+
+/**
+ * @remark You can read the definition for this function in "Mile.Windows.h".
+ */
+EXTERN_C HRESULT WINAPI MileDeviceIoControl(
+    _In_ HANDLE hDevice,
+    _In_ DWORD dwIoControlCode,
+    _In_opt_ LPVOID lpInBuffer,
+    _In_ DWORD nInBufferSize,
+    _Out_opt_ LPVOID lpOutBuffer,
+    _In_ DWORD nOutBufferSize,
+    _Out_opt_ LPDWORD lpBytesReturned,
+    _Inout_opt_ LPOVERLAPPED lpOverlapped)
+{
+    if (!::DeviceIoControl(
+        hDevice,
+        dwIoControlCode,
+        lpInBuffer,
+        nInBufferSize,
+        lpOutBuffer,
+        nOutBufferSize,
+        lpBytesReturned,
+        lpOverlapped))
+    {
+        return ::HRESULT_FROM_WIN32(::GetLastError());
+    }
+
+    return S_OK;
+}
+
+#endif
+
+/**
+ * @remark You can read the definition for this function in "Mile.Windows.h".
+ */
+EXTERN_C VOID WINAPI MileInitializeCriticalSection(
+    _Out_ LPCRITICAL_SECTION lpCriticalSection)
+{
+    ::InitializeCriticalSection(lpCriticalSection);
+}
+
+/**
+ * @remark You can read the definition for this function in "Mile.Windows.h".
+ */
+EXTERN_C VOID WINAPI MileDeleteCriticalSection(
+    _Inout_ LPCRITICAL_SECTION lpCriticalSection)
+{
+    ::DeleteCriticalSection(lpCriticalSection);
+}
+
+/**
+ * @remark You can read the definition for this function in "Mile.Windows.h".
+ */
+EXTERN_C VOID WINAPI MileEnterCriticalSection(
+    _Inout_ LPCRITICAL_SECTION lpCriticalSection)
+{
+    ::EnterCriticalSection(lpCriticalSection);
+}
+
+/**
+ * @remark You can read the definition for this function in "Mile.Windows.h".
+ */
+EXTERN_C VOID WINAPI MileLeaveCriticalSection(
+    _Inout_ LPCRITICAL_SECTION lpCriticalSection)
+{
+    ::LeaveCriticalSection(lpCriticalSection);
+}
+
+/**
+ * @remark You can read the definition for this function in "Mile.Windows.h".
+ */
+EXTERN_C BOOL WINAPI MileTryEnterCriticalSection(
+    _Inout_ LPCRITICAL_SECTION lpCriticalSection)
+{
+    return ::TryEnterCriticalSection(lpCriticalSection);
+}
+
+/**
+ * @remark You can read the definition for this function in "Mile.Windows.h".
+ */
+EXTERN_C VOID WINAPI MileInitializeSRWLock(
+    _Out_ PSRWLOCK SRWLock)
+{
+    ::InitializeSRWLock(SRWLock);
+}
+
+/**
+ * @remark You can read the definition for this function in "Mile.Windows.h".
+ */
+EXTERN_C VOID WINAPI MileAcquireSRWLockExclusive(
+    _Inout_ PSRWLOCK SRWLock)
+{
+    ::AcquireSRWLockExclusive(SRWLock);
+}
+
+/**
+ * @remark You can read the definition for this function in "Mile.Windows.h".
+ */
+EXTERN_C BOOL WINAPI MileTryAcquireSRWLockExclusive(
+    _Inout_ PSRWLOCK SRWLock)
+{
+    return ::TryAcquireSRWLockExclusive(SRWLock);
+}
+
+/**
+ * @remark You can read the definition for this function in "Mile.Windows.h".
+ */
+EXTERN_C VOID WINAPI MileReleaseSRWLockExclusive(
+    _Inout_ PSRWLOCK SRWLock)
+{
+    ::ReleaseSRWLockExclusive(SRWLock);
+}
+
+/**
+ * @remark You can read the definition for this function in "Mile.Windows.h".
+ */
+EXTERN_C VOID WINAPI MileAcquireSRWLockShared(
+    _Inout_ PSRWLOCK SRWLock)
+{
+    ::AcquireSRWLockShared(SRWLock);
+}
+
+/**
+ * @remark You can read the definition for this function in "Mile.Windows.h".
+ */
+EXTERN_C BOOL WINAPI MileTryAcquireSRWLockShared(
+    _Inout_ PSRWLOCK SRWLock)
+{
+    return ::TryAcquireSRWLockShared(SRWLock);
+}
+
+/**
+ * @remark You can read the definition for this function in "Mile.Windows.h".
+ */
+EXTERN_C VOID WINAPI MileReleaseSRWLockShared(
+    _Inout_ PSRWLOCK SRWLock)
+{
+    ::ReleaseSRWLockShared(SRWLock);
+}
+
+/**
+ * The internal content of the file enumerator handle.
+ */
+typedef struct _MILE_FILE_ENUMERATOR_OBJECT
+{
+    HANDLE FileHandle;
+    CRITICAL_SECTION CriticalSection;
+    PFILE_ID_BOTH_DIR_INFO CurrentFileInfo;
+    BYTE FileInfoBuffer[32768];
+} MILE_FILE_ENUMERATOR_OBJECT, *PMILE_FILE_ENUMERATOR_OBJECT;
+
+/**
+ * @remark You can read the definition for this function in "Mile.Windows.h".
+ */
+EXTERN_C HRESULT WINAPI MileCreateFileEnumerator(
+    _In_ HANDLE FileHandle,
+    _Out_ PMILE_FILE_ENUMERATOR_HANDLE FileEnumeratorHandle)
+{
+    if ((!FileEnumeratorHandle) || (INVALID_HANDLE_VALUE == FileHandle))
+        return __HRESULT_FROM_WIN32(ERROR_INVALID_PARAMETER);
+
+    *FileEnumeratorHandle = nullptr;
+
+    PMILE_FILE_ENUMERATOR_OBJECT Object = nullptr;
+    HRESULT hr = ::MileAllocMemory(
+        sizeof(MILE_FILE_ENUMERATOR_OBJECT),
+        reinterpret_cast<PVOID*>(&Object));
+    if (hr == S_OK)
+    {
+        Object->FileHandle = FileHandle;
+        ::MileInitializeCriticalSection(&Object->CriticalSection);
+
+        *FileEnumeratorHandle = Object;
+    }
+
+    return hr;
+}
+
+/**
+ * @remark You can read the definition for this function in "Mile.Windows.h".
+ */
+EXTERN_C HRESULT WINAPI MileCloseFileEnumerator(
+    _In_ MILE_FILE_ENUMERATOR_HANDLE FileEnumeratorHandle)
+{
+    if (!FileEnumeratorHandle)
+        return __HRESULT_FROM_WIN32(ERROR_INVALID_PARAMETER);
+
+    PMILE_FILE_ENUMERATOR_OBJECT Object =
+        reinterpret_cast<PMILE_FILE_ENUMERATOR_OBJECT>(FileEnumeratorHandle);
+
+    ::MileDeleteCriticalSection(&Object->CriticalSection);
+
+    return ::MileFreeMemory(Object);
+}
+
+/**
+ * @remark You can read the definition for this function in "Mile.Windows.h".
+ */
+EXTERN_C HRESULT WINAPI MileQueryFileEnumerator(
+    _In_ MILE_FILE_ENUMERATOR_HANDLE FileEnumeratorHandle,
+    _Out_ PMILE_FILE_ENUMERATOR_INFORMATION FileEnumeratorInformation)
+{
+    if ((!FileEnumeratorHandle) || (!FileEnumeratorInformation))
+        return __HRESULT_FROM_WIN32(ERROR_INVALID_PARAMETER);
+
+    HRESULT hr = S_OK;
+
+    PMILE_FILE_ENUMERATOR_OBJECT Object =
+        reinterpret_cast<PMILE_FILE_ENUMERATOR_OBJECT>(FileEnumeratorHandle);
+
+    ::MileEnterCriticalSection(&Object->CriticalSection);
+
+    if (!Object->CurrentFileInfo)
+    {
+        Object->CurrentFileInfo =
+            reinterpret_cast<PFILE_ID_BOTH_DIR_INFO>(Object->FileInfoBuffer);
+
+        hr = ::MileGetFileInformation(
+            Object->FileHandle,
+            FILE_INFO_BY_HANDLE_CLASS::FileIdBothDirectoryRestartInfo,
+            Object->CurrentFileInfo,
+            sizeof(Object->FileInfoBuffer));
+    }
+    else if (!Object->CurrentFileInfo->NextEntryOffset)
+    {
+        Object->CurrentFileInfo =
+            reinterpret_cast<PFILE_ID_BOTH_DIR_INFO>(Object->FileInfoBuffer);
+        hr = ::MileGetFileInformation(
+            Object->FileHandle,
+            FILE_INFO_BY_HANDLE_CLASS::FileIdBothDirectoryInfo,
+            Object->CurrentFileInfo,
+            sizeof(Object->FileInfoBuffer));
+    }
+    else
+    {
+        Object->CurrentFileInfo = reinterpret_cast<PFILE_ID_BOTH_DIR_INFO>(
+            reinterpret_cast<ULONG_PTR>(Object->CurrentFileInfo)
+            + Object->CurrentFileInfo->NextEntryOffset);
+    }
+
+    if (SUCCEEDED(hr))
+    {
+        PFILE_ID_BOTH_DIR_INFO CurrentFileInfo = Object->CurrentFileInfo;
+
+        FileEnumeratorInformation->CreationTime.dwLowDateTime =
+            CurrentFileInfo->CreationTime.LowPart;
+        FileEnumeratorInformation->CreationTime.dwHighDateTime =
+            CurrentFileInfo->CreationTime.HighPart;
+
+        FileEnumeratorInformation->LastAccessTime.dwLowDateTime =
+            CurrentFileInfo->LastAccessTime.LowPart;
+        FileEnumeratorInformation->LastAccessTime.dwHighDateTime =
+            CurrentFileInfo->LastAccessTime.HighPart;
+
+        FileEnumeratorInformation->LastWriteTime.dwLowDateTime =
+            CurrentFileInfo->LastWriteTime.LowPart;
+        FileEnumeratorInformation->LastWriteTime.dwHighDateTime =
+            CurrentFileInfo->LastWriteTime.HighPart;
+
+        FileEnumeratorInformation->ChangeTime.dwLowDateTime =
+            CurrentFileInfo->ChangeTime.LowPart;
+        FileEnumeratorInformation->ChangeTime.dwHighDateTime =
+            CurrentFileInfo->ChangeTime.HighPart;
+
+        FileEnumeratorInformation->FileSize =
+            CurrentFileInfo->EndOfFile.QuadPart;
+
+        FileEnumeratorInformation->AllocationSize =
+            CurrentFileInfo->AllocationSize.QuadPart;
+
+        FileEnumeratorInformation->FileAttributes =
+            CurrentFileInfo->FileAttributes;
+
+        FileEnumeratorInformation->EaSize =
+            CurrentFileInfo->EaSize;
+
+        FileEnumeratorInformation->FileId =
+            CurrentFileInfo->FileId;
+
+        ::StringCbCopyNW(
+            FileEnumeratorInformation->ShortName,
+            sizeof(FileEnumeratorInformation->ShortName),
+            CurrentFileInfo->ShortName,
+            CurrentFileInfo->ShortNameLength);
+
+        ::StringCbCopyNW(
+            FileEnumeratorInformation->FileName,
+            sizeof(FileEnumeratorInformation->FileName),
+            CurrentFileInfo->FileName,
+            CurrentFileInfo->FileNameLength);
+    }
+
+    ::MileLeaveCriticalSection(&Object->CriticalSection);
+
+    return hr;
+}
+
+/**
+ * @remark You can read the definition for this function in "Mile.Windows.h".
+ */
+EXTERN_C HRESULT WINAPI MileGetCompressedFileSize(
+    _In_ HANDLE FileHandle,
+    _Out_ PULONGLONG CompressedFileSize)
+{
+    FILE_COMPRESSION_INFO FileCompressionInfo;
+    HRESULT hr = ::MileGetFileInformation(
+        FileHandle,
+        FILE_INFO_BY_HANDLE_CLASS::FileCompressionInfo,
+        &FileCompressionInfo,
+        sizeof(FILE_COMPRESSION_INFO));
+    if (hr == S_OK)
+    {
+        *CompressedFileSize = static_cast<ULONGLONG>(
+            FileCompressionInfo.CompressedFileSize.QuadPart);
+    }
+    else
+    {
+        hr = ::MileGetFileSize(FileHandle, CompressedFileSize);
+    }
+
+    return hr;
+}
+
+#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP | WINAPI_PARTITION_SYSTEM)
+
+/**
+ * The information about the Windows Overlay Filter file provider.
+ */
+typedef struct _WOF_FILE_PROVIDER_EXTERNAL_INFO
+{
+    WOF_EXTERNAL_INFO Wof;
+    FILE_PROVIDER_EXTERNAL_INFO FileProvider;
+} WOF_FILE_PROVIDER_EXTERNAL_INFO, * PWOF_FILE_PROVIDER_EXTERNAL_INFO;
+
+#endif
+
+#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP | WINAPI_PARTITION_SYSTEM)
+
+/**
+ * @remark You can read the definition for this function in "Mile.Windows.h".
+ */
+EXTERN_C HRESULT WINAPI MileRemoveFileWofCompressionAttribute(
+    _In_ HANDLE FileHandle)
+{
+    return ::MileDeviceIoControl(
+        FileHandle,
+        FSCTL_DELETE_EXTERNAL_BACKING,
+        nullptr,
+        0,
+        nullptr,
+        0,
+        nullptr,
+        nullptr);
+}
+
+#endif
+
+#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP | WINAPI_PARTITION_SYSTEM)
+
+/**
+ * @remark You can read the definition for this function in "Mile.Windows.h".
+ */
+EXTERN_C HRESULT WINAPI MileSetFileWofCompressionAttribute(
+    _In_ HANDLE FileHandle,
+    _In_ DWORD CompressionAlgorithm)
+{
+    switch (CompressionAlgorithm)
+    {
+    case FILE_PROVIDER_COMPRESSION_XPRESS4K:
+    case FILE_PROVIDER_COMPRESSION_LZX:
+    case FILE_PROVIDER_COMPRESSION_XPRESS8K:
+    case FILE_PROVIDER_COMPRESSION_XPRESS16K:
+        break;
+    default:
+        return E_INVALIDARG;
+    }
+
+    WOF_FILE_PROVIDER_EXTERNAL_INFO WofInfo = { 0 };
+
+    WofInfo.Wof.Version = WOF_CURRENT_VERSION;
+    WofInfo.Wof.Provider = WOF_PROVIDER_FILE;
+
+    WofInfo.FileProvider.Version = FILE_PROVIDER_CURRENT_VERSION;
+    WofInfo.FileProvider.Flags = 0;
+    WofInfo.FileProvider.Algorithm = CompressionAlgorithm;
+
+    return ::MileDeviceIoControl(
+        FileHandle,
+        FSCTL_SET_EXTERNAL_BACKING,
+        &WofInfo,
+        sizeof(WofInfo),
+        nullptr,
+        0,
+        nullptr,
+        nullptr);
+}
+
+#endif
+
+#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP | WINAPI_PARTITION_SYSTEM)
+
+/**
+ * @remark You can read the definition for this function in "Mile.Windows.h".
+ */
+EXTERN_C HRESULT WINAPI MileGetFileWofCompressionAttribute(
+    _In_ HANDLE FileHandle,
+    _Out_ PDWORD CompressionAlgorithm)
+{
+    if (!CompressionAlgorithm)
+        return E_INVALIDARG;
+
+    WOF_FILE_PROVIDER_EXTERNAL_INFO WofInfo = { 0 };
+
+    HRESULT hr = ::MileDeviceIoControl(
+        FileHandle,
+        FSCTL_GET_EXTERNAL_BACKING,
+        nullptr,
+        0,
+        &WofInfo,
+        sizeof(WofInfo),
+        nullptr,
+        nullptr);
+    if (hr == S_OK)
+    {
+        *CompressionAlgorithm = WofInfo.FileProvider.Algorithm;
+    }
+
+    return hr;
+}
+
+#endif
+
+#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP | WINAPI_PARTITION_SYSTEM)
+
+/**
+ * @remark You can read the definition for this function in "Mile.Windows.h".
+ */
+EXTERN_C HRESULT WINAPI MileSetFileNtfsCompressionAttribute(
+    _In_ HANDLE FileHandle,
+    _In_ USHORT CompressionAlgorithm)
+{
+    switch (CompressionAlgorithm)
+    {
+    case COMPRESSION_FORMAT_NONE:
+    case COMPRESSION_FORMAT_DEFAULT:
+    case COMPRESSION_FORMAT_LZNT1:
+        break;
+    default:
+        return E_INVALIDARG;
+    }
+
+    return ::MileDeviceIoControl(
+        FileHandle,
+        FSCTL_SET_COMPRESSION,
+        &CompressionAlgorithm,
+        sizeof(CompressionAlgorithm),
+        nullptr,
+        0,
+        nullptr,
+        nullptr);
+}
+
+#endif
+
+#if WINAPI_FAMILY_PARTITION(WINAPI_PARTITION_DESKTOP | WINAPI_PARTITION_SYSTEM)
+
+/**
+ * @remark You can read the definition for this function in "Mile.Windows.h".
+ */
+EXTERN_C HRESULT WINAPI MileGetFileNtfsCompressionAttribute(
+    _In_ HANDLE FileHandle,
+    _Out_ PUSHORT CompressionAlgorithm)
+{
+    if (!CompressionAlgorithm)
+        return E_INVALIDARG;
+
+    return ::MileDeviceIoControl(
+        FileHandle,
+        FSCTL_GET_COMPRESSION,
+        nullptr,
+        0,
+        CompressionAlgorithm,
+        sizeof(*CompressionAlgorithm),
+        nullptr,
+        nullptr);
+}
+
+#endif
